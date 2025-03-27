@@ -1,9 +1,29 @@
-const {createServer} = require('node:http');
-const {url} = require ('node:url');
+const { createServer } = require('node:http');
+const { URL } = require('node:url');
 
-port = 3000;
-host='localhost';
+const port = 3000;
+const host = 'localhost';
+let valor;
 
+// Função simplificada com fetch
+async function getBitcoinPriceBrl(moeda) {
+  try {
+    const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl`);
+    const data = await response.json();
+    return data.bitcoin.brl;
+  } catch (error) {
+    throw new Error('Falha ao buscar preço do Bitcoin');
+  }
+}
+async function getBitcoinPriceUsd(moeda) {
+    try {
+      const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd`);
+      const data = await response.json();
+      return data.bitcoin.usd;
+    } catch (error) {
+      throw new Error('Falha ao buscar preço do Bitcoin');
+    }
+  }
 
 function verificaPrice(valor, moeda){
 
@@ -15,7 +35,6 @@ function verificaPrice(valor, moeda){
         }else if(valor>=450000){
             return "Preço alto";
         }
-
     }else if (moeda =="usd"){
         if(valor<60000){
             return "Preço baixo";
@@ -24,43 +43,41 @@ function verificaPrice(valor, moeda){
         }else if(valor>=80000){
             return "Preço alto";
         }
-
+    
     }else{
         return "Moeda não encontrada"
     }
+    }
 
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${host}:${port}`);
+  
+  if (url.pathname === '/price' && req.method === 'GET') {
+    try {
+        const moeda = url.searchParams.get('moeda');
+        if(moeda=="brl"){
+             valor = await getBitcoinPriceBrl();
 
-};
-
-const server = createServer((req, res) => {
-    res.setHeader('Content-Type', 'text/plain');
-    
-    const url = new URL(req.url, `http://${host}:${port}`);
-    
-    if (req.method === "GET" && req.url.startsWith("/price")) { // Rota corrigida
-        const queryParams = Object.fromEntries(url.searchParams.entries());
-        const valor = parseFloat(queryParams.valor); // Conversão para número
-        const moeda = queryParams.moeda;
-
-        // Validação de parâmetros
-        if (isNaN(valor) || !moeda) {
-            res.statusCode = 400;
-            return res.end("Parâmetros inválidos! Use: /price?valor=NUMERO&moeda=brl|usd");
+        }else if(moeda=="usd"){
+             valor = await getBitcoinPriceUsd();
         }
 
-        // Processamento
-        const resultado = verificaPrice(valor, moeda.toLowerCase());
-        res.end(resultado);
-        
-    } else {
-        res.statusCode = 404;
-        res.end("Rota não encontrada!");
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({
+        preco: valor,
+        moeda : moeda,
+        classificacao: verificaPrice(valor, moeda)
+      }));
+    } catch (error) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: error.message }));
     }
+  } else {
+    res.statusCode = 404;
+    res.end('Rota não encontrada');
+  }
 });
 
-
-server.listen(port, ()=>{
-    console.log(`Server running on http://${host}:${port}`);
-
+server.listen(port, () => {
+  console.log(`Servidor rodando em http://${host}:${port}`);
 });
-
